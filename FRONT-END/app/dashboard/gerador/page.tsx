@@ -310,7 +310,119 @@ export default function GeneratorDashboard() {
 
           {/* Coletas Tab */}
           <TabsContent value="collections" className="space-y-4">
-            
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Minhas Coletas</h2>
+              <Button onClick={() => setShowScheduleForm(!showScheduleForm)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Solicitar Coleta
+              </Button>
+            </div>
+            {showScheduleForm && (
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle>Solicitar Agendamento de Coleta</CardTitle>
+                  <CardDescription>Selecione uma carga, dia e horário para agendar a coleta</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault()
+                      if (!scheduleData.loadId || !scheduleData.date || !scheduleData.time) return
+                      const newCollection: Collection = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        loadId: scheduleData.loadId,
+                        collectorName: 'A definir',
+                        scheduledDate: `${scheduleData.date}T${scheduleData.time}`,
+                        status: 'solicitado',
+                      }
+                      const updatedCollections = [...collections, newCollection]
+                      setCollections(updatedCollections)
+                      localStorage.setItem(`collections_${user?.id}`, JSON.stringify(updatedCollections))
+                      setShowScheduleForm(false)
+                      setScheduleData({ loadId: '', date: '', time: '' })
+                    }}
+                    className="space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="loadId">Carga para coleta</Label>
+                      <Select
+                        value={scheduleData.loadId}
+                        onValueChange={value => setScheduleData({ ...scheduleData, loadId: value })}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a carga" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {loads.map(load => (
+                            <SelectItem key={load.id} value={load.id}>
+                              {load.type} - {load.weight}kg
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="date">Dia</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={scheduleData.date}
+                        onChange={e => setScheduleData({ ...scheduleData, date: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="time">Horário</Label>
+                      <Input
+                        id="time"
+                        type="time"
+                        value={scheduleData.time}
+                        onChange={e => setScheduleData({ ...scheduleData, time: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit">Agendar Coleta</Button>
+                      <Button type="button" variant="outline" onClick={() => setShowScheduleForm(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="grid gap-4">
+              {collections.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhuma coleta agendada ainda.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                collections.map((collection) => (
+                  <Card key={collection.id}>
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>Coleta #{collection.id.slice(0, 8)}</CardTitle>
+                          <CardDescription>Coletor: {collection.collectorName}</CardDescription>
+                        </div>
+                        {getStatusBadge(collection.status)}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm">
+                        <span className="font-medium">Data:</span>{" "}
+                        {new Date(collection.scheduledDate).toLocaleDateString("pt-BR")}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
           </TabsContent>
 
           {/* Points Tab */}
