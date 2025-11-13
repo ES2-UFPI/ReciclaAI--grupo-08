@@ -1,0 +1,48 @@
+# Nome do workflow
+name: CI do Django (Dev)
+
+# Gatilhos: Roda em pushes e PRs para o branch 'dev'
+on:
+  push:
+    branches: [ "dev" ]
+  pull_request:
+    branches: [ "dev" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Clona o repositório
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # 2. Configura o Python (versão genérica 3.x)
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          # Usa a última versão 3.x disponível no runner
+          python-version: '3.x' 
+
+      # 3. Cache das dependências do Pip (para acelerar execuções futuras)
+      - name: Cache de dependências Pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 4. Instala as dependências
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 5. Verifica se há migrações faltando
+      - name: Verificar migrações
+        run: python manage.py makemigrations --check
+
+      # 6. Roda os testes do Django
+      - name: Rodar testes
+        run: python manage.py test
