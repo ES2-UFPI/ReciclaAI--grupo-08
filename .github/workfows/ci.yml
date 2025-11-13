@@ -24,25 +24,31 @@ jobs:
           # Usa a última versão 3.x disponível no runner
           python-version: '3.x' 
 
-      # 3. Cache das dependências do Pip (para acelerar execuções futuras)
+      # 3. Cache (Atualizado para ler o requirements.txt do backend)
       - name: Cache de dependências Pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          # A chave agora aponta especificamente para o arquivo dentro do backend
+          key: ${{ runner.os }}-pip-${{ hashFiles('BACK-END/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       # 4. Instala as dependências
       - name: Instalar dependências
+        working-directory: ./BACK-END
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       # 5. Verifica se há migrações faltando
       - name: Verificar migrações
-        run: python manage.py makemigrations --check
+        working-directory: ./BACK-END
+        run: |
+          python manage.py makemigrations --check
 
       # 6. Roda os testes do Django
       - name: Rodar testes
-        run: python manage.py test
+        working-directory: ./BACK-END
+        run: |
+          python manage.py test
