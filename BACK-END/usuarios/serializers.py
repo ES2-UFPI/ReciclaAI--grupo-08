@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Usuario, Produtor, Coletor, Receptor
 from django.db import transaction
+from .validators import validate_cpf, validate_cnpj
 
 
 class ProdutorSerializer(serializers.ModelSerializer):
@@ -19,6 +20,9 @@ class ReceptorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Receptor
         fields = ['nome_empresa', 'cnpj', 'endereco_comercial', 'horario_funcionamento', 'tipos_de_residuo_aceitos']
+        extra_kwargs = {
+            'cnpj': {'validators': [validate_cnpj]}
+        }
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
@@ -34,7 +38,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'perfil_produtor', 'perfil_coletor', 'perfil_receptor' # Campos de escrita
         ]
         extra_kwargs = {
-            'password': {'write_only': True}
+            'password': {'write_only': True},
+            'cpf': {'validators': [validate_cpf]}
         }
 
     @transaction.atomic
@@ -48,8 +53,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
         usuario = Usuario.objects.create_user(**validated_data)
 
         
-        if usuario.tipo_usuario == Usuario.TipoUsuario.PRODUTOR:
-            Produtor.objects.create(usuario=usuario, **(produtor_data or {}))
+        if usuario.tipo_usuario == Usuario.TipoUsuario.PRODUTOR and produtor_data is not None:
+            Produtor.objects.create(usuario=usuario, **produtor_data)
         elif usuario.tipo_usuario == Usuario.TipoUsuario.COLETOR and coletor_data:
             Coletor.objects.create(usuario=usuario, **coletor_data)
         elif usuario.tipo_usuario == Usuario.TipoUsuario.RECEPTOR and receptor_data:

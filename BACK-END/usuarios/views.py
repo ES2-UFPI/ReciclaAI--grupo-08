@@ -1,23 +1,20 @@
-from rest_framework import generics
+from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 from .models import Usuario
+from rest_framework.pagination import PageNumberPagination
 from .serializers import UsuarioSerializer, UsuarioReadOnlySerializer
 from django_filters.rest_framework import DjangoFilterBackend
 
-class UsuarioListCreateView(generics.ListCreateAPIView):
+class UsuarioViewSet(viewsets.ModelViewSet):
 
-    queryset = Usuario.objects.all()
-    serializer_class = UsuarioSerializer
-    permission_classes = [AllowAny] 
+    queryset = Usuario.objects.all().order_by('id')
+    pagination_class = PageNumberPagination
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['tipo_usuario']
 
-class UsuarioDetailView(generics.RetrieveUpdateDestroyAPIView):
-    
-    queryset = Usuario.objects.all()
-    serializer_class = UsuarioSerializer
-
     def get_serializer_class(self):
-        if self.request.method in ['PUT', 'PATCH']:
-            return UsuarioSerializer
-        return UsuarioReadOnlySerializer
+        # Para leitura (list, retrieve), usa um serializer que mostra os perfis.
+        if self.action in ['list', 'retrieve']:
+            return UsuarioReadOnlySerializer
+        return UsuarioSerializer
