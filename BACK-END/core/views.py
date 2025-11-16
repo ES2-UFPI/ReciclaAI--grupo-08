@@ -1,4 +1,6 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import (
     Usuario, Residuo, Carga, CargaResiduo, Coleta,
     Avaliacao, Pontos, Recebimento, UsuarioResiduo
@@ -13,6 +15,24 @@ from .serializers import (
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
+
+    @action(detail=False, methods=['get'], url_path='produtores')
+    def produtores(self, request):
+        usuarios = Usuario.objects.filter(tipo_usuario="produtor")
+        serializer = self.get_serializer(usuarios, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='coletores')
+    def coletores(self, request):
+        usuarios = Usuario.objects.filter(tipo_usuario="coletor")
+        serializer = self.get_serializer(usuarios, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='receptores')
+    def receptores(self, request):
+        usuarios = Usuario.objects.filter(tipo_usuario="receptor")
+        serializer = self.get_serializer(usuarios, many=True)
+        return Response(serializer.data)
 
 
 class ResiduoViewSet(viewsets.ModelViewSet):

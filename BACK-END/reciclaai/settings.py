@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-9&3^-tx^#&@yt7r^3@*3wzrt3%y8j!4(a*k0_+y##-r*ez-d02
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["reciclaai.onrender.com", "localhost", "127.0.0.1", "reciclaai-production.up.railway.app"]
 
 
 # Application definition
@@ -78,11 +78,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'postgres',
-        'USER': 'postgres',
-        'PASSWORD': 'SenhaSecreta1',
-        'HOST': 'db.yxbrsldjylhofwcgojui.supabase.co',
+        'USER': 'postgres.yxbrsldjylhofwcgojui',
+        'PASSWORD': 'SenhaSecreta1$',
+        'HOST': 'aws-1-us-east-2.pooler.supabase.com',
         'PORT': '5432',
-
 
     }
 }
@@ -105,6 +104,12 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+
+
+
+
+
 
 
 # Internationalization
