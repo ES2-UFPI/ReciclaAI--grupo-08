@@ -1,10 +1,15 @@
-
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic import RedirectView
+from rest_framework.routers import DefaultRouter
+from usuarios.views import UsuarioViewSet
+from residuos.views import ResiduoViewSet
+
+router = DefaultRouter()
+
+router.register(r'usuarios', UsuarioViewSet, basename='usuario')
+router.register(r'residuos', ResiduoViewSet, basename='residuo')
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", include("usuarios.urls")),
-    path('', RedirectView.as_view(url='/api/usuarios/', permanent=False), name='index_redirect'),
+    path("", include(router.urls)),
 ]
