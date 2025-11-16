@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { DashboardHeader } from "@/components/dashboard-header"
@@ -32,6 +32,8 @@ interface AcceptedCollection {
   weight: number
   scheduledDate: string
   status: "scheduled" | "completed"
+  expectedCode?: string
+  rating?: number
   points: number
 }
 
@@ -50,7 +52,58 @@ export default function CollectorDashboard() {
   const [availableLoads, setAvailableLoads] = useState<AvailableLoad[]>([])
   const [myCollections, setMyCollections] = useState<AcceptedCollection[]>([])
   const [receivers, setReceivers] = useState<Receiver[]>([])
-  const [filteredReceivers, setFilteredReceivers] = useState<Receiver[]>([])
+  const [searchQuery, setSearchQuery] = useState<string>("")
+  // filtros para coletas disponíveis
+  const [materialFilter, setMaterialFilter] = useState<string>("Todos")
+  const [maxDistanceKm, setMaxDistanceKm] = useState<number | "">("")
+
+  // estados para concluir coleta (código + avaliação)
+  const [completingCollectionId, setCompletingCollectionId] = useState<string | null>(null)
+  const [completionCodeInput, setCompletionCodeInput] = useState<string>("")
+  const [completionRatingInput, setCompletionRatingInput] = useState<number | "">("")
+  const [completionError, setCompletionError] = useState<string>("")
+  const [completionSuccess, setCompletionSuccess] = useState<string>("")
+
+  const [tab, setTab] = useState<string>("available")
+
+  const filteredAvailableLoads = useMemo(() => {
+    return availableLoads.filter((load) => {
+      // filtro por material
+      if (materialFilter !== "Todos" && load.type !== materialFilter) return false
+
+      // filtro por distância (espera strings como "2.3 km" ou "2,3 km")
+      if (typeof maxDistanceKm === "number" && maxDistanceKm > 0) {
+        const parsed = parseFloat(String(load.distance).replace(",", ".").replace(/[^\d.]/g, ""))
+        if (!isNaN(parsed) && parsed > maxDistanceKm) return false
+      }
+
+      return true
+    })
+  }, [availableLoads, materialFilter, maxDistanceKm])
+
+  // lista de receptores filtrada 
+  const filteredReceiversMemo = useMemo(() => {
+    return receivers.filter((receiver) => {
+      // material filter
+      if (materialFilter !== "Todos" && !receiver.acceptedMaterials.includes(materialFilter)) return false
+
+      // distance filter (placeholder — receiver pode não ter distance)
+      if (typeof maxDistanceKm === "number" && maxDistanceKm > 0) {
+        const distanceField = (receiver as any).distance || ""
+        const parsed = parseFloat(String(distanceField).replace(",", ".").replace(/[^\d.]/g, ""))
+        if (!isNaN(parsed) && parsed > maxDistanceKm) return false
+      }
+
+      // text search
+      const q = searchQuery.trim().toLowerCase()
+      if (q) {
+        const haystack = `${receiver.name} ${receiver.address} ${receiver.acceptedMaterials.join(" ")}`.toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+
+      return true
+    })
+  }, [receivers, materialFilter, maxDistanceKm, searchQuery])
 
   useEffect(() => {
     if (!isLoading && (!user || user.tipoUsuario !== "coletor")) {
@@ -74,7 +127,7 @@ export default function CollectorDashboard() {
           weight: 15.5,
           description: "Garrafas PET e embalagens plásticas",
           distance: "2.3 km",
-          points: 50,
+          points: 15.5 * 10,
         },
         {
           id: "2",
@@ -84,7 +137,7 @@ export default function CollectorDashboard() {
           weight: 8.2,
           description: "Papelão e papel de escritório",
           distance: "1.8 km",
-          points: 30,
+          points: 8.2 * 10,
         },
         {
           id: "3",
@@ -94,11 +147,11 @@ export default function CollectorDashboard() {
           weight: 25.0,
           description: "Resíduos orgânicos de cozinha",
           distance: "3.5 km",
-          points: 80,
+          points: 25.0 * 10,
         },
       ])
 
-       const initialReceivers: Receiver[] = [
+      const initialReceivers: Receiver[] = [
         {
           id: "r1",
           name: "Recicla Fácil",
@@ -118,11 +171,12 @@ export default function CollectorDashboard() {
       ]
 
       setReceivers(initialReceivers)
-      setFilteredReceivers(initialReceivers)
     }
   }, [user])
 
   const handleAcceptLoad = (load: AvailableLoad) => {
+    // generate a code that the generator would provide to the collector to confirm delivery
+    const expectedCode = Math.random().toString(36).slice(2, 8).toUpperCase()
     const newCollection: AcceptedCollection = {
       id: Math.random().toString(36).substr(2, 9),
       loadId: load.id,
@@ -132,6 +186,9 @@ export default function CollectorDashboard() {
       weight: load.weight,
       scheduledDate: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
       status: "scheduled",
+      expectedCode,
+      // rating will be set when confirmed
+      rating: undefined,
       points: load.points,
     }
 
@@ -143,19 +200,41 @@ export default function CollectorDashboard() {
     setAvailableLoads(availableLoads.filter((l) => l.id !== load.id))
   }
 
-  const handleCompleteCollection = (collectionId: string) => {
+  // submissão do código + avaliação para concluir a coleta
+  const handleSubmitCompletion = (collectionId: string) => {
+    setCompletionError("")
+    setCompletionSuccess("")
+    const coll = myCollections.find((c) => c.id === collectionId)
+    if (!coll) {
+      setCompletionError("Coleta não encontrada")
+      return
+    }
+    if (!completionCodeInput.trim()) {
+      setCompletionError("Insira o código fornecido pelo gerador")
+      return
+    }
+    if (coll.expectedCode && coll.expectedCode.toLowerCase() !== completionCodeInput.trim().toLowerCase()) {
+      setCompletionError("Código inválido")
+      return
+    }
+    const rating = typeof completionRatingInput === "number" ? Math.max(0, Math.min(5, completionRatingInput)) : undefined
     const updatedCollections = myCollections.map((c) =>
-      c.id === collectionId ? { ...c, status: "completed" as const } : c,
+      c.id === collectionId ? { ...c, status: "completed" as const, rating } : c,
     )
     setMyCollections(updatedCollections)
     localStorage.setItem(`collector_collections_${user?.id}`, JSON.stringify(updatedCollections))
 
-    // Update user points
+    // Update user points (keep previous logic)
     const collection = myCollections.find((c) => c.id === collectionId)
     if (collection && user) {
-      const updatedUser = { ...user, points: user.pontos + collection.points }
+      const updatedUser = { ...user, pontos: user.pontos + collection.points }
       localStorage.setItem("reciclai_user", JSON.stringify(updatedUser))
     }
+
+    setCompletingCollectionId(null)
+    setCompletionCodeInput("")
+    setCompletionRatingInput("")
+    setCompletionSuccess("Coleta confirmada e avaliação registrada")
   }
 
   const getStatusBadge = (status: string) => {
@@ -192,7 +271,7 @@ export default function CollectorDashboard() {
     const close = new Date(agora)
     close.setHours(fechadoHora, fechadoMinuto, 0, 0)
 
-    if(close <= open) {
+    if (close <= open) {
       return agora >= open || agora < close
     }
     return agora >= open && agora < close
@@ -255,10 +334,29 @@ export default function CollectorDashboard() {
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue="available" className="space-y-4">
-          <TabsList>
+        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+          {/* Select para telas pequenas */}
+          <div className="sm:hidden mb-3">
+            <select
+              value={tab}
+              onChange={(e) => setTab(e.target.value)}
+              className="w-full border rounded px-3 py-2 bg-white"
+              aria-label="Selecionar aba"
+            >
+              <option value="available">Disponíveis</option>
+              <option value="collections">Minhas Coletas</option>
+              <option value="deliveries">Entregas</option>
+              <option value="receivers">Buscar Receptores</option>
+              <option value="points">Pontos</option>
+              <option value="reports">Relatórios</option>
+            </select>
+          </div>
+
+          {/* TabsList visível em telas >= sm; em mobile usamos o select acima */}
+          <TabsList className="hidden sm:flex gap-2 overflow-x-auto">
             <TabsTrigger value="available">Disponíveis</TabsTrigger>
             <TabsTrigger value="collections">Minhas Coletas</TabsTrigger>
+            <TabsTrigger value="deliveries">Entregas</TabsTrigger>
             <TabsTrigger value="receivers">Buscar Receptores</TabsTrigger>
             <TabsTrigger value="points">Pontos</TabsTrigger>
             <TabsTrigger value="reports">Relatórios</TabsTrigger>
@@ -267,6 +365,42 @@ export default function CollectorDashboard() {
           {/* Available Loads Tab */}
           <TabsContent value="available" className="space-y-4">
             <h2 className="text-2xl font-bold">Coletas Disponíveis</h2>
+
+            {/* filtros: material + distância */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-medium">Filtrar por Material da Carga: </h3>
+                <select
+                  value={materialFilter}
+                  onChange={(e) => setMaterialFilter(e.target.value)}
+                  className="border rounded px-3 py-2"
+                >
+                  <option>Todos</option>
+                  <option>Plástico</option>
+                  <option>Papel</option>
+                  <option>Vidro</option>
+                  <option>Metal</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                <h3 className="text-lg font-medium">Distância Máxima: </h3>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Max km"
+                  value={maxDistanceKm === "" ? "" : String(maxDistanceKm)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setMaxDistanceKm(v === "" ? "" : Number(v))
+                  }}
+                  className="w-28 border rounded px-2 py-2"
+                />
+                <Button onClick={() => { setMaterialFilter("Todos"); setMaxDistanceKm("") }}>
+                  Limpar
+                </Button>
+              </div>
+            </div>
+
             <div className="grid gap-4">
               {availableLoads.length === 0 ? (
                 <Card>
@@ -275,8 +409,15 @@ export default function CollectorDashboard() {
                     <p className="text-muted-foreground">Nenhuma coleta disponível no momento.</p>
                   </CardContent>
                 </Card>
+              ) : filteredAvailableLoads.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum resultado para os filtros selecionados.</p>
+                  </CardContent>
+                </Card>
               ) : (
-                availableLoads.map((load) => (
+                filteredAvailableLoads.map((load) => (
                   <Card key={load.id}>
                     <CardHeader>
                       <div className="flex justify-between items-start">
@@ -352,11 +493,54 @@ export default function CollectorDashboard() {
                           <span className="font-medium">Data Agendada:</span>{" "}
                           {new Date(collection.scheduledDate).toLocaleDateString("pt-BR")}
                         </p>
+
+                        {/* concluir coleta: formulário de código + avaliação */}
                         {collection.status === "scheduled" && (
-                          <Button onClick={() => handleCompleteCollection(collection.id)} className="w-full">
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Marcar como Concluída
-                          </Button>
+                          <>
+                            {completingCollectionId !== collection.id ? (
+                              <Button onClick={() => { setCompletingCollectionId(collection.id); setCompletionError(""); setCompletionSuccess(""); }}>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Indicar Coleta Realizada
+                              </Button>
+                            ) : (
+                              <div className="space-y-3 border rounded p-3">
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">Código do Gerador</label>
+                                  <input
+                                    value={completionCodeInput}
+                                    onChange={(e) => setCompletionCodeInput(e.target.value)}
+                                    className="w-full border px-3 py-2 rounded"
+                                    placeholder="Ex: ABC123"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">Avaliação da Carga (0-5)</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={5}
+                                    value={completionRatingInput === "" ? "" : String(completionRatingInput)}
+                                    onChange={(e) => setCompletionRatingInput(e.target.value === "" ? "" : Number(e.target.value))}
+                                    className="w-32 border px-2 py-2 rounded"
+                                  />
+                                </div>
+                                {completionError && <p className="text-sm text-red-600">{completionError}</p>}
+                                {completionSuccess && <p className="text-sm text-green-700">{completionSuccess}</p>}
+                                <div className="flex gap-2">
+                                  <Button onClick={() => handleSubmitCompletion(collection.id)} className="flex-1">
+                                    Confirmar e Avaliar
+                                  </Button>
+                                  <Button variant="ghost" onClick={() => { setCompletingCollectionId(null); setCompletionCodeInput(""); setCompletionRatingInput(""); }}>
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {/* se já concluída, mostrar avaliação */}
+                        {collection.status === "completed" && collection.rating !== undefined && (
+                          <p className="text-sm text-muted-foreground">Avaliação: {collection.rating} / 5</p>
                         )}
                       </div>
                     </CardContent>
@@ -369,18 +553,42 @@ export default function CollectorDashboard() {
           {/* Receivers Tab */}
           <TabsContent value="receivers" className="space-y-4">
             <h2 className="text-2xl font-bold">Buscar Receptores</h2>
-            <div className="flex gap-4 mb-4">
-              <h3 className="text-lg font-medium self-center">Filtrar por:</h3>
-              <Button onClick={() => setFilteredReceivers(buscarReceptoresDistancia(5))}>Até 5 km de distância</Button>
-              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Plástico"))}>Que aceitam Plástico</Button>
-              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Papel"))}>Que aceitam Papel</Button>
-              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Vidro"))}>Que aceitam Vidro</Button>
-              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Metal"))}>Que aceitam Metal</Button>
-              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Orgânico"))}>Que aceitam Orgânico</Button>
+
+            {/* filtros: material + distância + busca */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 mb-4">
+
+              <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                <h3 className="text-lg font-medium">Filtrar por Material Aceito: </h3>
+                <select
+                  value={materialFilter}
+                  onChange={(e) => setMaterialFilter(e.target.value)}
+                  className="border rounded px-3 py-2"
+                >
+                  <option>Todos</option>
+                  <option>Plástico</option>
+                  <option>Papel</option>
+                  <option>Vidro</option>
+                  <option>Metal</option>
+                </select>
+                <h3 className="text-lg font-medium">Distância Máxima: </h3>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Max km"
+                  value={maxDistanceKm === "" ? "" : String(maxDistanceKm)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setMaxDistanceKm(v === "" ? "" : Number(v))
+                  }}
+                  className="w-28 border rounded px-2 py-2"
+                />
+
+                <Button onClick={() => { setMaterialFilter("Todos"); setMaxDistanceKm(""); setSearchQuery("") }}>
+                  Limpar
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-4 mb-4">
-              <Button className="bg-muted-foreground" onClick={() => setFilteredReceivers(receivers)}>Limpar Filtros</Button>
-            </div>
+
             <div className="grid gap-4">
               {receivers.length === 0 ? (
                 <Card>
@@ -389,15 +597,15 @@ export default function CollectorDashboard() {
                     <p className="text-muted-foreground">Nenhum receptor cadastrado.</p>
                   </CardContent>
                 </Card>
-              ) : filteredReceivers.length === 0 ? (
+              ) : filteredReceiversMemo.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center">
                     <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">Nenhum filtro selecionado</p>
+                    <p className="text-muted-foreground">Nenhum resultado para os filtros selecionados.</p>
                   </CardContent>
                 </Card>
               ) : (
-                filteredReceivers.map((receiver) => {
+                filteredReceiversMemo.map((receiver) => {
                   const aberto = estaAberto(receiver.horarioFuncionamento)
                   return (
                     <Card key={receiver.id}>
@@ -408,10 +616,13 @@ export default function CollectorDashboard() {
                             <CardDescription>{receiver.address}</CardDescription>
                             <CardContent>
                               <span>Materiais Aceitos: {receiver.acceptedMaterials.join(", ")}</span>
-                              <br/>
-                              <span>Horário de Funcionamento: {receiver.horarioFuncionamento.open} - {receiver.horarioFuncionamento.close}</span>
-                              <br/>
-                              <span>Contato: {receiver.contactInfo}</span>          
+                              <br />
+                              <span>
+                                Horário de Funcionamento: {receiver.horarioFuncionamento.open} -{" "}
+                                {receiver.horarioFuncionamento.close}
+                              </span>
+                              <br />
+                              <span>Contato: {receiver.contactInfo}</span>
                             </CardContent>
                           </div>
                           <div className="ml-4 mt-1">
@@ -512,6 +723,54 @@ export default function CollectorDashboard() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          </TabsContent>
+
+          {/* Deliveries Tab */}
+          <TabsContent value="deliveries" className="space-y-4">
+            <h2 className="text-2xl font-bold">Entregas</h2>
+            <div className="grid gap-4">
+              {myCollections.filter(c => c.status === "completed").length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhuma entrega registrada.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                myCollections
+                  .filter(c => c.status === "completed")
+                  .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+                  .map((c) => (
+                    <Card key={c.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle>{c.type}</CardTitle>
+                            <CardDescription>{c.generatorName}</CardDescription>
+                          </div>
+                          <Badge variant="outline">{c.points} pts</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm">{c.generatorAddress}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Data: {new Date(c.scheduledDate).toLocaleDateString("pt-BR")}
+                            </p>
+                            <p className="text-sm">Código: {c.id}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{c.weight} kg</p>
+                            <p className="text-sm text-green-700">+{c.points} pts</p>
+                            {c.rating !== undefined && <p className="text-sm mt-2">Avaliação: {c.rating} / 5</p>}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+              )}
             </div>
           </TabsContent>
         </Tabs>
