@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Spinner } from "@/components/ui/spinner"
 import { Truck, Award, BarChart3, MapPin, Package, CheckCircle } from "lucide-react"
+import { set } from "react-hook-form"
 
 interface AvailableLoad {
   id: string
@@ -34,11 +35,22 @@ interface AcceptedCollection {
   points: number
 }
 
+interface Receiver {
+  id: string
+  name: string
+  address: string
+  horarioFuncionamento: { open: string; close: string }
+  acceptedMaterials: string[]
+  contactInfo: string
+}
+
 export default function CollectorDashboard() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
   const [availableLoads, setAvailableLoads] = useState<AvailableLoad[]>([])
   const [myCollections, setMyCollections] = useState<AcceptedCollection[]>([])
+  const [receivers, setReceivers] = useState<Receiver[]>([])
+  const [filteredReceivers, setFilteredReceivers] = useState<Receiver[]>([])
 
   useEffect(() => {
     if (!isLoading && (!user || user.tipoUsuario !== "coletor")) {
@@ -85,6 +97,28 @@ export default function CollectorDashboard() {
           points: 80,
         },
       ])
+
+       const initialReceivers: Receiver[] = [
+        {
+          id: "r1",
+          name: "Recicla Fácil",
+          address: "Av. Verde, 100 - Bairro Verde",
+          horarioFuncionamento: { open: "08:00", close: "17:00" },
+          acceptedMaterials: ["Plástico", "Papel", "Metal"],
+          contactInfo: "(11) 1234-5678",
+        },
+        {
+          id: "r2",
+          name: "Eco Ponto",
+          address: "Rua Azul, 200 - Bairro Azul",
+          horarioFuncionamento: { open: "07:00", close: "18:00" },
+          acceptedMaterials: ["Vidro", "Papel"],
+          contactInfo: "(11) 8765-4321",
+        },
+      ]
+
+      setReceivers(initialReceivers)
+      setFilteredReceivers(initialReceivers)
     }
   }, [user])
 
@@ -136,6 +170,32 @@ export default function CollectorDashboard() {
     }
 
     return <Badge variant={variants[status]}>{labels[status]}</Badge>
+  }
+
+  const buscarReceptoresMaterial = (material: string) => {
+    return receivers.filter((receiver) => receiver.acceptedMaterials.includes(material))
+  }
+
+  const buscarReceptoresDistancia = (maxDistanceKm: number) => {
+    // Esta função é um placeholder. Em uma aplicação real, você precisaria calcular a distância
+    // entre o coletor e os receptores usando coordenadas geográficas.
+    return receivers // Retorna todos os receptores como exemplo
+  }
+
+  const estaAberto = (horario: { open: string; close: string }) => {
+    const agora = new Date()
+    const [abertoHora, abertoMinuto] = horario.open.split(":").map(Number)
+    const [fechadoHora, fechadoMinuto] = horario.close.split(":").map(Number)
+
+    const open = new Date(agora)
+    open.setHours(abertoHora, abertoMinuto, 0, 0)
+    const close = new Date(agora)
+    close.setHours(fechadoHora, fechadoMinuto, 0, 0)
+
+    if(close <= open) {
+      return agora >= open || agora < close
+    }
+    return agora >= open && agora < close
   }
 
   if (isLoading || !user) {
@@ -199,6 +259,7 @@ export default function CollectorDashboard() {
           <TabsList>
             <TabsTrigger value="available">Disponíveis</TabsTrigger>
             <TabsTrigger value="collections">Minhas Coletas</TabsTrigger>
+            <TabsTrigger value="receivers">Buscar Receptores</TabsTrigger>
             <TabsTrigger value="points">Pontos</TabsTrigger>
             <TabsTrigger value="reports">Relatórios</TabsTrigger>
           </TabsList>
@@ -301,6 +362,73 @@ export default function CollectorDashboard() {
                     </CardContent>
                   </Card>
                 ))
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Receivers Tab */}
+          <TabsContent value="receivers" className="space-y-4">
+            <h2 className="text-2xl font-bold">Buscar Receptores</h2>
+            <div className="flex gap-4 mb-4">
+              <h3 className="text-lg font-medium self-center">Filtrar por:</h3>
+              <Button onClick={() => setFilteredReceivers(buscarReceptoresDistancia(5))}>Até 5 km de distância</Button>
+              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Plástico"))}>Que aceitam Plástico</Button>
+              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Papel"))}>Que aceitam Papel</Button>
+              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Vidro"))}>Que aceitam Vidro</Button>
+              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Metal"))}>Que aceitam Metal</Button>
+              <Button onClick={() => setFilteredReceivers(buscarReceptoresMaterial("Orgânico"))}>Que aceitam Orgânico</Button>
+            </div>
+            <div className="flex gap-4 mb-4">
+              <Button className="bg-muted-foreground" onClick={() => setFilteredReceivers(receivers)}>Limpar Filtros</Button>
+            </div>
+            <div className="grid gap-4">
+              {receivers.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum receptor cadastrado.</p>
+                  </CardContent>
+                </Card>
+              ) : filteredReceivers.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Nenhum filtro selecionado</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                filteredReceivers.map((receiver) => {
+                  const aberto = estaAberto(receiver.horarioFuncionamento)
+                  return (
+                    <Card key={receiver.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start w-full">
+                          <div>
+                            <CardTitle>{receiver.name}</CardTitle>
+                            <CardDescription>{receiver.address}</CardDescription>
+                            <CardContent>
+                              <span>Materiais Aceitos: {receiver.acceptedMaterials.join(", ")}</span>
+                              <br/>
+                              <span>Horário de Funcionamento: {receiver.horarioFuncionamento.open} - {receiver.horarioFuncionamento.close}</span>
+                              <br/>
+                              <span>Contato: {receiver.contactInfo}</span>          
+                            </CardContent>
+                          </div>
+                          <div className="ml-4 mt-1">
+                            <span
+                              className={
+                                "inline-block px-2 py-0.5 text-xs font-medium rounded " +
+                                (aberto ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")
+                              }
+                            >
+                              {aberto ? "Aberto agora" : "Fechado agora"}
+                            </span>
+                          </div>
+                        </div>
+                      </CardHeader>
+                    </Card>
+                  )
+                })
               )}
             </div>
           </TabsContent>
