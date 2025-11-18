@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "django_filters",
     "usuarios.apps.UsuariosConfig",
     "residuos",
+    "carga.apps.CargaConfig",
 ]
 
 MIDDLEWARE = [

@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from .models import Usuario
 from rest_framework.pagination import PageNumberPagination
@@ -12,6 +12,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     pagination_class = PageNumberPagination
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['tipo_usuario']
+    permission_classes = [AllowAny] # Permite acesso total sem autenticação
 
     def get_serializer_class(self):
         # Para leitura (list, retrieve), usa um serializer que mostra os perfis.
