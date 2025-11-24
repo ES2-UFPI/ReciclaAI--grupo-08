@@ -216,7 +216,9 @@ class Usuario(models.Model):
     tipo_pessoa = models.CharField(max_length=1, blank=True, null=True)
     quantidade_minima_kg = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     horario = models.CharField(max_length=100, blank=True, null=True)
-
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    avaliacao_media = models.DecimalField(max_digits=3, decimal_places=2)
     class Meta:
         managed = False
         db_table = 'usuario'
