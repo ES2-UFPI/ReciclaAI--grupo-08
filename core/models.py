@@ -86,7 +86,7 @@ class Avaliacao(models.Model):
     criado_em = models.DateTimeField(blank=True, null=True)
 
     class Meta:
-        managed = False
+        #managed = False
         db_table = 'avaliacao'
 
 
@@ -227,7 +227,7 @@ class Usuario(models.Model):
 
 class UsuarioResiduo(models.Model):
     
-    usuario = models.ForeignKey(Usuario, models.DO_NOTHING, primary_key=True)
+    usuario = models.ForeignKey(Usuario, models.DO_NOTHING)
     residuos = models.ForeignKey(Residuo, models.DO_NOTHING)
     residuos = models.ForeignKey(Residuo, models.DO_NOTHING, null=True, blank=True)
 
