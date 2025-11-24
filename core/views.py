@@ -1,3 +1,5 @@
+from django.db import models
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework import status
 from django.db.models import Avg
@@ -57,6 +59,46 @@ class ColetaViewSet(viewsets.ModelViewSet):
     queryset = Coleta.objects.all()
     serializer_class = ColetaSerializer
 
+    @action(detail=False, methods=['post'], url_path='solicitar')
+    def solicitar_coleta(self, request):
+        coletor_id = request.data.get("coletor")
+        carga_id = request.data.get("carga")
+
+        if not coletor_id or not carga_id:
+            return Response(
+                {"detail": "coletor e carga são obrigatórios."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            coletor = Usuario.objects.get(id=coletor_id)
+            carga = Carga.objects.get(id=carga_id)
+        except Usuario.DoesNotExist:
+            return Response({"detail": "Coletor não encontrado."}, status=404)
+        except Carga.DoesNotExist:
+            return Response({"detail": "Carga não encontrada."}, status=404)
+
+        coleta = Coleta.objects.create(
+            coletor=coletor,
+            carga=carga,
+            status="pendente",
+            data_coleta=timezone.now()
+        )
+
+        serializer = self.get_serializer(coleta)
+        return Response(serializer.data, status=201) 
+    
+    @action(detail=False, methods=['get'], url_path='disponiveis')
+    def listar_disponiveis(self, request):
+        coletas = Coleta.objects.filter(
+            coletor__isnull=True,
+        ).filter(
+            models.Q(status="pendente") | models.Q(status__isnull=True)
+        )
+
+        serializer = self.get_serializer(coletas, many=True)
+        return Response(serializer.data)
+    
 
 class AvaliacaoViewSet(viewsets.ModelViewSet):
     queryset = Avaliacao.objects.all()

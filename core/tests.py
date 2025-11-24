@@ -1,8 +1,10 @@
+from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework.test import APIClient
 from django.test import TestCase
+
 
 from .models import (
     Usuario, Residuo, Carga, CargaResiduo, Coleta,
@@ -366,7 +368,7 @@ class UsuarioResiduoTests(APITestCase):
 
 #Teste de endpoints
 # -----------------------
-#  Avaliação -> Retonar avaliação de um user
+# 14 Avaliação -> Retonar avaliação de um user
 
 class UsuarioRatingTests(TestCase):
     def setUp(self):
@@ -382,7 +384,7 @@ class UsuarioRatingTests(TestCase):
             avaliacao_media=0
         )
 
-        # Cria algumas avaliações
+        # Cria avaliações
         Avaliacao.objects.create(
             avaliador=self.usuario,
             avaliado=self.usuario,
@@ -400,7 +402,93 @@ class UsuarioRatingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("avaliacao_media", response.data)
 
-        # média esperada: (4 + 2) / 2 = 3
+        # média esperda de  3
         self.assertEqual(response.data["avaliacao_media"], 3.0)
 
+#-------------------------------------------
+# 15Coleta 
 
+class SolicitarColetaTests(APITestCase):
+
+    def setUp(self):
+        self.coletor = Usuario.objects.create(
+            nome="Coletor XPTO",
+            email="coletor@test.com",
+            senha="123",
+            tipo_usuario="coletor",
+            latitude=0,
+            longitude=0,
+            avaliacao_media=0
+        )
+
+        self.carga = Carga.objects.create(
+            produtor=self.coletor,   #pra evitar null
+            valor_total=10,
+            status="pendente",
+            criado_em=timezone.now()
+        )
+
+    def test_solicitar_coleta(self):
+        payload = {
+            "coletor": self.coletor.id,
+            "carga": self.carga.id
+        }
+
+        response = self.client.post("/api/coletas/solicitar/", payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "pendente")
+        self.assertEqual(response.data["coletor"], self.coletor.id)
+        self.assertEqual(response.data["carga"], self.carga.id)
+
+
+#16 - Ver as coletas disponiveis 
+
+class ColetasDisponiveisTests(APITestCase):
+
+    def setUp(self):
+        self.usuario = Usuario.objects.create(
+            nome="Produtor",
+            email="prod@test.com",
+            senha="123",
+            tipo_usuario="produtor",
+            latitude=0,
+            longitude=0,
+            avaliacao_media=0
+        )
+
+        self.carga = Carga.objects.create(
+            produtor=self.usuario,
+            valor_total=10,
+            status="aguardando",
+            criado_em=timezone.now()
+        )
+
+        # Coleta disponível (sem coletor)
+        self.coleta1 = Coleta.objects.create(
+            carga=self.carga,
+            status="pendente"
+        )
+
+        self.coletor = Usuario.objects.create(
+            nome="Coletor",
+            email="col@test.com",
+            senha="123",
+            tipo_usuario="coletor",
+            latitude=0,
+            longitude=0,
+            avaliacao_media=0
+        )
+
+        self.coleta2 = Coleta.objects.create(
+            carga=self.carga,
+            coletor=self.coletor,
+            status="pendente"
+        )
+
+    def test_listar_coletas_disponiveis(self):
+        response = self.client.get("/api/coletas/disponiveis/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], self.coleta1.id)
