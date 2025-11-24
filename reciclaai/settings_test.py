@@ -1,6 +1,6 @@
 from .settings import *
 
-#to run python manage.py test --settings=reciclaai.settings_test
+#to run: python manage.py test --settings=reciclaai.settings_test
 
 # Usar SQLite nos testes
 DATABASES = {

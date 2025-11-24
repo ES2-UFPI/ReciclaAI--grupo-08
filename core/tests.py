@@ -492,3 +492,114 @@ class ColetasDisponiveisTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id"], self.coleta1.id)
+
+#17 Aceitar coleta
+
+class AceitarColetaTests(APITestCase):
+    def setUp(self):
+        self.coletor = Usuario.objects.create(
+            nome="Coletor",
+            email="cole@test.com",
+            senha="123",
+            tipo_usuario="coletor",
+            latitude=0, longitude=0, avaliacao_media=0
+        )
+
+        self.produtor = Usuario.objects.create(
+            nome="Prod",
+            email="prod@test.com",
+            senha="123",
+            tipo_usuario="produtor",
+            latitude=0, longitude=0, avaliacao_media=0
+        )
+
+        self.carga = Carga.objects.create(
+            produtor=self.produtor,
+            valor_total=20, status="aguardando",
+            criado_em=timezone.now()
+        )
+
+        self.coleta = Coleta.objects.create(
+            carga=self.carga,
+            status="pendente"
+        )
+
+    def test_aceitar_coleta(self):
+        payload = {"coletor": self.coletor.id}
+        response = self.client.post(f"/api/coletas/{self.coleta.id}/aceitar/", payload, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "agendada")
+        self.assertEqual(response.data["coletor"], self.coletor.id)
+
+#18 Confirmar retirada
+
+class ConfirmarRetiradaTests(APITestCase):
+    def setUp(self):
+        self.produtor = Usuario.objects.create(
+            nome="Prod",
+            email="prod2@test.com",
+            senha="123",
+            tipo_usuario="produtor",
+            latitude=0, longitude=0, avaliacao_media=0
+        )
+        self.coletor = Usuario.objects.create(
+            nome="Coleta",
+            email="col2@test.com",
+            senha="123",
+            tipo_usuario="coletor",
+            latitude=0, longitude=0, avaliacao_media=0
+        )
+        self.carga = Carga.objects.create(
+            produtor=self.produtor,
+            valor_total=10,
+            status="aguardando",
+            criado_em=timezone.now()
+        )
+        self.coleta = Coleta.objects.create(
+            carga=self.carga,
+            coletor=self.coletor,
+            status="agendada"
+        )
+
+    def test_confirmar_retirada(self):
+        response = self.client.post(f"/api/coletas/{self.coleta.id}/confirmar-retirada/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "em_transito")
+
+# 19 confirmar entrega
+
+class ConfirmarEntregaTests(APITestCase):
+    def setUp(self):
+        self.produtor = Usuario.objects.create(
+            nome="Prod",
+            email="prod3@test.com",
+            senha="123",
+            tipo_usuario="produtor",
+            latitude=0, longitude=0, avaliacao_media=0
+        )
+        self.coletor = Usuario.objects.create(
+            nome="Coletor",
+            email="col3@test.com",
+            senha="123",
+            tipo_usuario="coletor",
+            latitude=0, longitude=0, avaliacao_media=0
+        )
+        self.carga = Carga.objects.create(
+            produtor=self.produtor,
+            valor_total=10,
+            status="aguardando",
+            criado_em=timezone.now()
+        )
+        self.coleta = Coleta.objects.create(
+            carga=self.carga,
+            coletor=self.coletor,
+            status="em_transito"
+        )
+
+    def test_confirmar_entrega(self):
+        response = self.client.post(f"/api/coletas/{self.coleta.id}/confirmar-entrega/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "finalizada")

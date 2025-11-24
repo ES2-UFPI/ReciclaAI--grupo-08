@@ -99,6 +99,68 @@ class ColetaViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(coletas, many=True)
         return Response(serializer.data)
     
+    @action(detail=True, methods=['post'], url_path='aceitar')
+    def aceitar_coleta(self, request, pk=None):
+        try:
+            coleta = Coleta.objects.get(id=pk)
+        except Coleta.DoesNotExist:
+            return Response({"detail": "Coleta não encontrada."}, status=404)
+
+        coletor_id = request.data.get("coletor")
+
+        if not coletor_id:
+            return Response({"detail": "ID do coletor é obrigatório."}, status=400)
+
+        try:
+            coletor = Usuario.objects.get(id=coletor_id)
+        except Usuario.DoesNotExist:
+            return Response({"detail": "Coletor não encontrado."}, status=404)
+
+        if coleta.status != "pendente" or coleta.coletor is not None:
+            return Response({"detail": "Coleta não está disponível para aceitação."}, status=400)
+
+        coleta.coletor = coletor
+        coleta.status = "agendada"
+        coleta.data_coleta = timezone.now()
+        coleta.save()
+
+        serializer = self.get_serializer(coleta)
+        return Response(serializer.data, status=200)
+    
+    @action(detail=True, methods=['post'], url_path='confirmar-retirada')
+    def confirmar_retirada(self, request, pk=None):
+        try:
+            coleta = Coleta.objects.get(id=pk)
+        except Coleta.DoesNotExist:
+            return Response({"detail": "Coleta não encontrada."}, status=404)
+
+        if coleta.status != "agendada":
+            return Response({"detail": "Coleta não está agendada."}, status=400)
+
+        coleta.status = "em_transito"
+        coleta.save()
+
+        serializer = self.get_serializer(coleta)
+        return Response(serializer.data, status=200)
+    
+    @action(detail=True, methods=['post'], url_path='confirmar-entrega')
+    def confirmar_entrega(self, request, pk=None):
+        try:
+            coleta = Coleta.objects.get(id=pk)
+        except Coleta.DoesNotExist:
+            return Response({"detail": "Coleta não encontrada."}, status=404)
+
+        if coleta.status != "em_transito":
+            return Response({"detail": "Coleta não está em trânsito."}, status=400)
+
+        coleta.status = "finalizada"
+        coleta.save()
+
+        serializer = self.get_serializer(coleta)
+        return Response(serializer.data, status=200)
+
+
+
 
 class AvaliacaoViewSet(viewsets.ModelViewSet):
     queryset = Avaliacao.objects.all()
