@@ -93,7 +93,7 @@ class Avaliacao(models.Model):
 class Carga(models.Model):
     produtor = models.ForeignKey('Usuario', models.DO_NOTHING, blank=True, null=True)
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    status = models.CharField(max_length=50, blank=True, null=True)
+    status = models.CharField(max_length=50, blank=True, null=True) # PENDENTE, AGENDADA, EM_TRANSITO e FINALIZADA
     criado_em = models.DateTimeField(blank=True, null=True)
     entregue_em = models.DateTimeField(blank=True, null=True)
 
@@ -228,6 +228,7 @@ class Usuario(models.Model):
 class UsuarioResiduo(models.Model):
     
     usuario = models.ForeignKey(Usuario, models.DO_NOTHING)
+    #usuario = models.ForeignKey(Usuario, models.DO_NOTHING, primary_key=True)
     residuos = models.ForeignKey(Residuo, models.DO_NOTHING)
     residuos = models.ForeignKey(Residuo, models.DO_NOTHING, null=True, blank=True)
 

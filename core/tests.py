@@ -1,13 +1,15 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework.test import APIClient
+from django.test import TestCase
 
 from .models import (
     Usuario, Residuo, Carga, CargaResiduo, Coleta,
     Avaliacao, Pontos, Recebimento, UsuarioResiduo
 )
 
-
+#Testes de CRUD básico
 #  -----------------------
 #  USUÁRIO
 
@@ -269,7 +271,7 @@ class PontosTests(APITestCase):
             avaliacao_media=0
         )
 
-        self.carga = Carga.objects.create(produtor=self.user, status="aberta")
+        self.carga = Carga.objects.create(produtor=self.user, status="pendente")
 
         self.payload = {
             "usuario": self.user.id,
@@ -361,3 +363,44 @@ class UsuarioResiduoTests(APITestCase):
         self.assertEqual(self.client.get(self.url).status_code, 200)
         self.assertEqual(self.client.get(f"{self.url}{uid}/").status_code, 200)      
         self.assertEqual(self.client.delete(f"{self.url}{uid}/").status_code, 204)
+
+#Teste de endpoints
+# -----------------------
+#  Avaliação -> Retonar avaliação de um user
+
+class UsuarioRatingTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.usuario = Usuario.objects.create(
+            nome="João",
+            email="joao@example.com",
+            senha="123",
+            tipo_usuario="cliente",
+            latitude=0,
+            longitude=0,
+            avaliacao_media=0
+        )
+
+        # Cria algumas avaliações
+        Avaliacao.objects.create(
+            avaliador=self.usuario,
+            avaliado=self.usuario,
+            nota=4
+        )
+        Avaliacao.objects.create(
+            avaliador=self.usuario,
+            avaliado=self.usuario,
+            nota=2
+        )
+
+    def test_rating_usuario(self):
+        response = self.client.get(f"/api/usuarios/{self.usuario.id}/rating/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("avaliacao_media", response.data)
+
+        # média esperada: (4 + 2) / 2 = 3
+        self.assertEqual(response.data["avaliacao_media"], 3.0)
+
+

@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     UsuarioViewSet, ResiduoViewSet, CargaViewSet, CargaResiduoViewSet,
     ColetaViewSet, AvaliacaoViewSet, PontosViewSet, RecebimentoViewSet,
-    UsuarioResiduoViewSet
+    UsuarioResiduoViewSet, UsuarioRatingView
 )
 
 router = DefaultRouter()
@@ -19,4 +19,5 @@ router.register(r'usuario-residuos', UsuarioResiduoViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path("usuarios/<int:user_id>/rating/", UsuarioRatingView.as_view(), name="usuario-rating"),
 ]

@@ -1,3 +1,6 @@
+from rest_framework.views import APIView
+from rest_framework import status
+from django.db.models import Avg
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -73,3 +76,23 @@ class RecebimentoViewSet(viewsets.ModelViewSet):
 class UsuarioResiduoViewSet(viewsets.ModelViewSet):
     queryset = UsuarioResiduo.objects.all()
     serializer_class = UsuarioResiduoSerializer
+
+class UsuarioRatingView(APIView):
+       def get(self, request, user_id):
+        try:
+            usuario = Usuario.objects.get(pk=user_id)
+        except Usuario.DoesNotExist:
+            return Response(
+                {"detail": "Usuário não encontrado"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        avaliacoes = Avaliacao.objects.filter(avaliado=usuario)
+
+        if not avaliacoes.exists():
+            return Response({"avaliacao_media": 0.0})
+
+        media = avaliacoes.aggregate(avg=Avg("nota"))["avg"]
+
+
+        return Response({"avaliacao_media": round(float(media), 2)})
