@@ -1,3 +1,4 @@
+from .states import get_coleta_state
 from django.db import models
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -116,7 +117,7 @@ class ColetaViewSet(viewsets.ModelViewSet):
         except Usuario.DoesNotExist:
             return Response({"detail": "Coletor não encontrado."}, status=404)
 
-        if coleta.status != "pendente" or coleta.coletor is not None:
+        if coleta.status.lower() != "pendente" or coleta.coletor is not None:
             return Response({"detail": "Coleta não está disponível para aceitação."}, status=400)
 
         coleta.coletor = coletor
@@ -126,7 +127,8 @@ class ColetaViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(coleta)
         return Response(serializer.data, status=200)
-    
+
+
     @action(detail=True, methods=['post'], url_path='confirmar-retirada')
     def confirmar_retirada(self, request, pk=None):
         try:
@@ -134,7 +136,7 @@ class ColetaViewSet(viewsets.ModelViewSet):
         except Coleta.DoesNotExist:
             return Response({"detail": "Coleta não encontrada."}, status=404)
 
-        if coleta.status != "agendada":
+        if coleta.status.lower() != "agendada":
             return Response({"detail": "Coleta não está agendada."}, status=400)
 
         coleta.status = "em_transito"
@@ -142,7 +144,8 @@ class ColetaViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(coleta)
         return Response(serializer.data, status=200)
-    
+
+
     @action(detail=True, methods=['post'], url_path='confirmar-entrega')
     def confirmar_entrega(self, request, pk=None):
         try:
@@ -150,7 +153,7 @@ class ColetaViewSet(viewsets.ModelViewSet):
         except Coleta.DoesNotExist:
             return Response({"detail": "Coleta não encontrada."}, status=404)
 
-        if coleta.status != "em_transito":
+        if coleta.status.lower() != "em_transito":
             return Response({"detail": "Coleta não está em trânsito."}, status=400)
 
         coleta.status = "finalizada"
@@ -158,6 +161,9 @@ class ColetaViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(coleta)
         return Response(serializer.data, status=200)
+
+    
+    
 
 
 
