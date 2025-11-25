@@ -72,20 +72,23 @@ class UsuarioSerializer(serializers.ModelSerializer):
         # Atualiza os campos do próprio usuário
         instance = super().update(instance, validated_data)
 
-        # Atualiza o perfil correspondente, se os dados foram enviados
-        if instance.tipo_usuario == Usuario.TipoUsuario.COLETOR and coletor_data:
-            if hasattr(instance, 'perfil_coletor'):
-                profile = instance.perfil_coletor
-                for attr, value in coletor_data.items():
-                    setattr(profile, attr, value)
-                profile.save()
+        # Dicionário para mapear tipo de usuário para dados e nome do perfil
+        profile_map = {
+            Usuario.TipoUsuario.PRODUTOR: (produtor_data, 'perfil_produtor'),
+            Usuario.TipoUsuario.COLETOR: (coletor_data, 'perfil_coletor'),
+            Usuario.TipoUsuario.RECEPTOR: (receptor_data, 'perfil_receptor'),
+        }
 
-        elif instance.tipo_usuario == Usuario.TipoUsuario.RECEPTOR and receptor_data:
-            if hasattr(instance, 'perfil_receptor'):
-                profile = instance.perfil_receptor
-                for attr, value in receptor_data.items():
-                    setattr(profile, attr, value)
-                profile.save()
+        # Obtém os dados e o nome do atributo do perfil para o tipo de usuário da instância
+        profile_data, profile_name = profile_map.get(instance.tipo_usuario, (None, None))
+
+        # Se dados do perfil foram enviados e o usuário tem o perfil correspondente, atualiza-o
+        if profile_data and profile_name and hasattr(instance, profile_name):
+            profile = getattr(instance, profile_name)
+            # Itera sobre os dados do perfil e atualiza os campos
+            for attr, value in profile_data.items():
+                setattr(profile, attr, value)
+            profile.save()
 
         return instance
 
