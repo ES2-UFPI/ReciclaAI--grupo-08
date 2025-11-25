@@ -1,113 +1,115 @@
-"use client"
+'use client';
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-
-type tipoUsuario = "gerador" | "coletor" | "receptor"
-type tipoPessoa = "fisica" | "juridica"
-
-interface User {
-  id: string
-  nome: string
-  email: string
-  telefone: string
-  endereco: string
-  tipoUsuario: tipoUsuario
-  tipoPessoa: tipoPessoa
-  cpf?: string
-  cnpj?: string
-  pontos: number
-}
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import api from '@/services/api'; // Sua instância simples do axios
+import { 
+  UsuarioResponse, 
+  UsuarioLogin, 
+  UsuarioCreate 
+} from '@/types/index';
 
 interface AuthContextType {
-  user: User | null
-  login: (email: string, senha: string) => Promise<boolean>
-  signup: (userData: Omit<User, "id" | "pontos"> & { senha: string }) => Promise<boolean>
-  logout: () => void
-  isLoading: boolean
+  user: UsuarioResponse | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (dados: UsuarioLogin) => Promise<void>;
+  register: (dados: UsuarioCreate) => Promise<boolean>;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<UsuarioResponse | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const router = useRouter();
 
+  // helper: determina rota de dashboard por tipo de usuário
+  const dashboardRouteFor = (u: UsuarioResponse | null) => {
+    if (!u) return "/auth"
+    switch (u.tipo_usuario) {
+      case "produtor":
+        return "/dashboard/produtor"
+      case "coletor":
+        return "/dashboard/coletor"
+      case "receptor":
+        return "/dashboard/receptor"
+      default:
+        return "/auth"
+    }
+  }
+  
+  // 1. Recuperar sessão ao recarregar a página
   useEffect(() => {
-    // Check for existing session
-    const storedUser = localStorage.getItem("reciclai_user")
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
+    // tenta ler chaves usadas anteriormente (compatibilidade)
+    const userSalvo = localStorage.getItem('reciclaai_user') || localStorage.getItem('reciclai_user')
+    if (userSalvo) {
+      try {
+        setUser(JSON.parse(userSalvo));
+      } catch {
+        localStorage.removeItem('reciclaai_user')
+      }
     }
-    setIsLoading(false)
-  }, [])
+    setIsLoading(false);
+  }, []);
 
-  const signup = async (userData: Omit<User, "id" | "pontos"> & { senha: string }) => {
+  // 2. Função de Login (Chamando API direto)
+  async function login(dados: UsuarioLogin) {
+    setIsLoading(true)
     try {
-      // Get existing users
-      const usersJson = localStorage.getItem("reciclai_users")
-      const users = usersJson ? JSON.parse(usersJson) : []
+      const response = await api.post<UsuarioResponse>('/auth/login', dados)
+      const usuarioLogado = response.data
 
-      // Check if email already exists
-      if (users.find((u: any) => u.email === userData.email)) {
-        return false
-      }
+      setUser(usuarioLogado)
+      // grava em ambas chaves para compatibilidade com versões anteriores
+      localStorage.setItem('reciclaai_user', JSON.stringify(usuarioLogado))
+      console.log("Usuário logado:", usuarioLogado)
 
-      // Create new user
-      const newUser: User & { senha: string } = {
-        id: Math.random().toString(36).substr(2, 9),
-        ...userData,
-        pontos: 0,
-      }
+      router.push(dashboardRouteFor(usuarioLogado))
+      console.log("Redirecionando para:", dashboardRouteFor(usuarioLogado))
+    } catch (error) {
+      console.error("Erro no login:", error)
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-      // Save to users list
-      users.push(newUser)
-      localStorage.setItem("reciclai_users", JSON.stringify(users))
+  // 3. Função de Registro/Cadastro (Chamando API direto)
+  async function register(dados: UsuarioCreate) {
+    setIsLoading(true)
+    try {
+      const response = await api.post<UsuarioResponse>('/auth/register', dados)
+      const novoUsuario = response.data
 
-      // Set usuario atual (sem senha)
-      const { senha, ...userWithoutPassword } = newUser
-      setUser(userWithoutPassword)
-      localStorage.setItem("reciclai_user", JSON.stringify(userWithoutPassword))
+      setUser(novoUsuario)
+      localStorage.setItem('reciclaai_user', JSON.stringify(novoUsuario))
 
+      router.push(dashboardRouteFor(novoUsuario))
       return true
-    } catch (error) {
-      console.error("Signup error:", error)
+    } catch (error: any) {
+      console.error("Erro no cadastro:", error)
+      if (error?.response?.data) console.error("Backend response:", error.response.data)
       return false
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const login = async (email: string, senha: string) => {
-    try {
-      const usersJson = localStorage.getItem("reciclai_users")
-      const users = usersJson ? JSON.parse(usersJson) : []
-
-      const foundUser = users.find((u: any) => u.email === email && u.senha === senha)
-
-      if (foundUser) {
-        const { senha, ...userWithoutPassword } = foundUser
-        setUser(userWithoutPassword)
-        localStorage.setItem("reciclai_user", JSON.stringify(userWithoutPassword))
-        return true
-      }
-
-      return false
-    } catch (error) {
-      console.error("Login error:", error)
-      return false
-    }
-  }
-
-  const logout = () => {
+  // 4. Logout
+  async function logout() {
     setUser(null)
-    localStorage.removeItem("reciclai_user")
+    localStorage.removeItem('reciclaai_user')
+    setIsLoading(false)
+    await router.replace("/auth")
   }
 
-  return <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-}
+export const useAuth = () => useContext(AuthContext);

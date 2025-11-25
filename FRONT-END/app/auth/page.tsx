@@ -5,6 +5,8 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { UsuarioLogin, TipoUsuario, TipoPessoa, UsuarioCreate } from "@/types/index"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,7 +19,7 @@ import Link from "next/link"
 
 export default function AuthPage() {
   const router = useRouter()
-  const { login, signup } = useAuth()
+  const { login, register } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -39,8 +41,8 @@ export default function AuthPage() {
     estado: "",
     cep: "",
     complemento: "",
-    tipoUsuario: "gerador" as "gerador" | "coletor" | "receptor",
-    tipoPessoa: "fisica" as "fisica" | "juridica",
+    tipo_usuario: TipoUsuario.PRODUTOR, // padrão
+    tipo_pessoa: TipoPessoa.FISICA, // padrão
     cpf: "",
     cnpj: "",
   })
@@ -50,15 +52,16 @@ export default function AuthPage() {
     setError("")
     setIsLoading(true)
 
-    const success = await login(loginEmail, loginPassword)
-
-    if (success) {
-      router.push("/dashboard")
-    } else {
+    try {
+      // passa um objeto conforme AuthContext espera (UsuarioLogin)
+      await login({ email: loginEmail, senha: loginPassword } as unknown as UsuarioLogin)
+      // AuthProvider já faz router.push em caso de sucesso; opcional manter lógica local
+    } catch (err) {
+      console.error("Login failed:", err)
       setError("Email ou senha inválidos")
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -66,39 +69,74 @@ export default function AuthPage() {
     setError("")
     setIsLoading(true)
 
+    // validacoes básicas
+    if (!signupData.nome || !signupData.email || !signupData.senha) {
+      setError("Nome, email e senha são obrigatórios")
+      setIsLoading(false)
+      return
+    }
+
     // Validate CPF or CNPJ based on person type
-    if (signupData.tipoPessoa === "fisica" && !signupData.cpf) {
+    if (signupData.tipo_pessoa === TipoPessoa.FISICA && !signupData.cpf) {
       setError("CPF é obrigatório para pessoa física")
       setIsLoading(false)
       return
     }
 
-    if (signupData.tipoPessoa === "juridica" && !signupData.cnpj) {
+    if (signupData.tipo_pessoa === TipoPessoa.JURIDICA && !signupData.cnpj) {
       setError("CNPJ é obrigatório para pessoa jurídica")
       setIsLoading(false)
       return
     }
 
-    // validar campos de endereço obrigatórios
+    // validar campos de endereco obrigatorios (componentes do form)
     if (!signupData.rua || !signupData.bairro || !signupData.numero || !signupData.cidade || !signupData.estado) {
-      setError("Preencha todos os dados obrigatórios")
+      setError("Preencha rua, número, bairro, cidade e estado")
       setIsLoading(false)
       return
     }
 
-    // montar endereço composto para compatibilidade com backend
-    const enderecoFormatado = `${signupData.rua}, ${signupData.numero}${signupData.complemento ? " - " + signupData.complemento : ""} - ${signupData.bairro}, ${signupData.cidade} - ${signupData.estado}${signupData.cep ? " - CEP: " + signupData.cep : ""}`
-    const payload = { ...signupData, endereco: enderecoFormatado }
+    try {
+      // montar endereco único na ordem: rua, numero, bairro, cidade, estado, cep
+      const endereco = `${signupData.rua}, ${signupData.numero}, ${signupData.bairro}, ${signupData.cidade}, ${signupData.estado}${signupData.cep ? ", " + signupData.cep : ""}`
 
-    const success = await signup(payload)
+      // construir payload exatamente conforme UsuarioCreate (snake_case)
+      const payload: UsuarioCreate = {
+        nome: signupData.nome,
+        email: signupData.email,
+        senha: signupData.senha,
+        telefone: signupData.telefone,
+        endereco,
+        tipo_usuario: signupData.tipo_usuario,
+        tipo_pessoa: signupData.tipo_pessoa,
+      }
 
-    if (success) {
-      router.push("/dashboard")
-    } else {
-      setError("Email já cadastrado")
+      // incluir CPF/CNPJ conforme tipo_pessoa
+      if (signupData.tipo_pessoa === TipoPessoa.FISICA) payload.cpf = signupData.cpf
+      if (signupData.tipo_pessoa === TipoPessoa.JURIDICA) payload.cnpj = signupData.cnpj
+
+      // incluir campos especificos do receptor apenas quando for receptor e tiver dados
+      // if (signupData.tipo_usuario === TipoUsuario.RECEPTOR) {
+      //   if (signupData.residuos_aceitos && signupData.residuos_aceitos.length > 0) {
+      //     payload.residuos_aceitos = signupData.residuos_aceitos
+      //   }
+      //   if (signupData.horario_funcionamento_inicio) payload.horario_funcionamento_inicio = signupData.horario_funcionamento_inicio
+      //   if (signupData.horario_funcionamento_fim) payload.horario_funcionamento_fim = signupData.horario_funcionamento_fim
+      //   if (signupData.dias_funcionamento && signupData.dias_funcionamento.length > 0) payload.dias_funcionamento = signupData.dias_funcionamento
+      // }
+
+      const success = await register(payload)
+
+      if (!success) {
+        setError("Falha no cadastro (verifique os dados).")
+      }
+      // se register fez router.push, não precisa redirecionar aqui
+    } catch (err) {
+      console.error("Erro no cadastro:", err)
+      setError("Erro ao cadastrar. Verifique os dados e tente novamente.")
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   return (
@@ -293,18 +331,18 @@ export default function AuthPage() {
                     <div className="space-y-2 lg:col-span-2">
                       <Label>Tipo de Usuário</Label>
                       <Select
-                        value={signupData.tipoUsuario}
-                        onValueChange={(value: "gerador" | "coletor" | "receptor") =>
-                          setSignupData({ ...signupData, tipoUsuario: value })
+                        value={signupData.tipo_usuario}
+                        onValueChange={(value: TipoUsuario.COLETOR | TipoUsuario.PRODUTOR | TipoUsuario.RECEPTOR) =>
+                          setSignupData({ ...signupData, tipo_usuario: value })
                         }
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="gerador">Gerador</SelectItem>
-                          <SelectItem value="coletor">Coletor</SelectItem>
-                          <SelectItem value="receptor">Receptor</SelectItem>
+                          <SelectItem value={TipoUsuario.PRODUTOR}>Produtor</SelectItem>
+                          <SelectItem value={TipoUsuario.COLETOR}>Coletor</SelectItem>
+                          <SelectItem value={TipoUsuario.RECEPTOR}>Receptor</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -312,19 +350,19 @@ export default function AuthPage() {
                     <div className="space-y-2 lg:col-span-2">
                       <Label>Tipo de Pessoa</Label>
                       <RadioGroup
-                        value={signupData.tipoPessoa}
-                        onValueChange={(value: "fisica" | "juridica") =>
-                          setSignupData({ ...signupData, tipoPessoa: value })
+                        value={signupData.tipo_pessoa}
+                        onValueChange={(value: TipoPessoa.FISICA | TipoPessoa.JURIDICA) =>
+                          setSignupData({ ...signupData, tipo_pessoa: value })
                         }
                       >
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="fisica" id="fisica" />
+                          <RadioGroupItem value={TipoPessoa.FISICA} id="fisica" />
                           <Label htmlFor="fisica" className="font-normal">
                             Pessoa Física
                           </Label>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="juridica" id="juridica" />
+                          <RadioGroupItem value={TipoPessoa.JURIDICA} id="juridica" />
                           <Label htmlFor="juridica" className="font-normal">
                             Pessoa Jurídica
                           </Label>
@@ -332,7 +370,7 @@ export default function AuthPage() {
                       </RadioGroup>
                     </div>
 
-                    {signupData.tipoPessoa === "fisica" ? (
+                    {signupData.tipo_pessoa === TipoPessoa.FISICA ? (
                       <div className="space-y-2">
                         <Label htmlFor="cpf">CPF</Label>
                         <Input
