@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from .validators import validate_cpf, validate_cnpj
+from residuos.models import Residuo
+from decimal import Decimal
 
 class Usuario(AbstractUser):
 
@@ -63,10 +65,30 @@ class Receptor(models.Model):
     cnpj = models.CharField(max_length=18, unique=True, help_text="Pode ser informado com ou sem pontuação.", validators=[validate_cnpj])
     endereco_comercial = models.CharField(max_length=255, verbose_name="Endereço Comercial")
     horario_funcionamento = models.CharField(max_length=100, verbose_name="Horário de Funcionamento")
-    tipos_de_residuo_aceitos = models.CharField(max_length=255, help_text="Ex: Plástico, Vidro, Metal")
+    tipos_de_residuo_aceitos = models.ManyToManyField(Residuo, through='ResiduoAceito', related_name='receptores', blank=True)
 
     def __str__(self):
         return self.nome_empresa
 
     class Meta:
         ordering = ['nome_empresa']
+
+
+class ResiduoAceito(models.Model):
+    """
+    Modelo intermediário que conecta um Receptor aos Resíduos que ele aceita,
+    adicionando informações específicas da relação.
+    """
+    receptor = models.ForeignKey(Receptor, on_delete=models.CASCADE, related_name='residuos_aceitos')
+    residuo = models.ForeignKey(Residuo, on_delete=models.CASCADE)
+    quantidade_minima = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    preco_unidade = models.DecimalField(max_digits=10, decimal_places=2)
+    unidade_medida = models.CharField(max_length=10, choices=[('KG', 'Kg'), ('UN', 'Unidade')])
+
+    class Meta:
+        unique_together = ('receptor', 'residuo')
+        verbose_name = "Resíduo Aceito"
+        verbose_name_plural = "Resíduos Aceitos"
+
+    def __str__(self):
+        return f"{self.receptor.nome_empresa} aceita {self.residuo.tipo}"

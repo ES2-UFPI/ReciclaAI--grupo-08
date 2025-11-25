@@ -44,8 +44,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_filters",
     "usuarios.apps.UsuariosConfig",
-    "residuos",
+    "residuos.apps.ResiduosConfig",
     "carga.apps.CargaConfig",
+    "coleta.apps.ColetaConfig",
+    "recebimento.apps.RecebimentoConfig",
 ]
 
 MIDDLEWARE = [

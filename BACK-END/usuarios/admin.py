@@ -1,6 +1,11 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import Usuario, Coletor, Receptor, Produtor
+from .models import Usuario, Coletor, Receptor, Produtor, ResiduoAceito
+
+
+class ResiduoAceitoInline(admin.TabularInline):
+    model = ResiduoAceito
+    extra = 1 # Mostra 1 campo extra para adicionar
 
 @admin.register(Usuario)
 class UsuarioAdmin(BaseUserAdmin):
@@ -19,6 +24,11 @@ class UsuarioAdmin(BaseUserAdmin):
     )
 
 
+@admin.register(Receptor)
+class ReceptorAdmin(admin.ModelAdmin):
+    list_display = ('nome_empresa', 'usuario', 'cnpj')
+    inlines = [ResiduoAceitoInline]
+
+
 admin.site.register(Produtor)
 admin.site.register(Coletor)
-admin.site.register(Receptor)
