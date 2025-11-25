@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "residuos.apps.ResiduosConfig",
     "carga.apps.CargaConfig",
     "coleta.apps.ColetaConfig",
+    "recebimento.apps.RecebimentoConfig",
 ]
 
 MIDDLEWARE = [
