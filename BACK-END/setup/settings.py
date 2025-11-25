@@ -23,12 +23,13 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# Para desenvolvimento, é recomendado usar DEBUG = True para ver as páginas de erro detalhadas.
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -43,6 +44,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_filters",
     "usuarios.apps.UsuariosConfig",
+    "residuos.apps.ResiduosConfig",
+    "carga.apps.CargaConfig",
+    "coleta.apps.ColetaConfig",
+    "recebimento.apps.RecebimentoConfig",
 ]
 
 MIDDLEWARE = [
@@ -130,4 +135,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Aponta para o seu modelo de usuário personalizado
 AUTH_USER_MODEL = "usuarios.Usuario"
 
-CSRF_TRUSTED_ORIGINS = ['https://localhost:8000']
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10
+}

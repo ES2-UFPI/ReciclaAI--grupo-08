@@ -18,10 +18,22 @@ interface ReceivedMaterial {
   points: number
 }
 
+interface PendingDelivery {
+  code: string
+  type: string
+  weight: number
+  source: string
+  points: number
+}
+
 export default function ReceiverDashboard() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
   const [receivedMaterials, setReceivedMaterials] = useState<ReceivedMaterial[]>([])
+  const [pendingDeliveries, setPendingDeliveries] = useState<PendingDelivery[]>([])
+  const [confirmCode, setConfirmCode] = useState("")
+  const [confirmError, setConfirmError] = useState("")
+  const [confirmSuccess, setConfirmSuccess] = useState("")
 
   useEffect(() => {
     if (!isLoading && (!user || user.tipoUsuario !== "receptor")) {
@@ -68,6 +80,70 @@ export default function ReceiverDashboard() {
       }
     }
   }, [user])
+
+  // load pending deliveries and received materials from localStorage (mock / persisted)
+  useEffect(() => {
+    if (!user) return
+    const pendingKey = `pending_deliveries_${user.id}`
+    const storedPending = localStorage.getItem(pendingKey)
+    if (storedPending) {
+      setPendingDeliveries(JSON.parse(storedPending))
+    } else {
+      // mock pending deliveries for demo (only if none present)
+      const mockPending: PendingDelivery[] = [
+        { code: "ABC123", type: "Plástico", weight: 50, source: "Gerador X", points: 60 },
+        { code: "XYZ789", type: "Papel", weight: 20, source: "Gerador Y", points: 25 },
+      ]
+      setPendingDeliveries(mockPending)
+      localStorage.setItem(pendingKey, JSON.stringify(mockPending))
+    }
+
+    // ensure received materials are persisted (already handled elsewhere)
+    const receivedKey = `receiver_materials_${user.id}`
+    const storedMaterials = localStorage.getItem(receivedKey)
+    if (storedMaterials) setReceivedMaterials(JSON.parse(storedMaterials))
+  }, [user])
+
+  // persist changes to receivedMaterials
+  useEffect(() => {
+    if (!user) return
+    localStorage.setItem(`receiver_materials_${user.id}`, JSON.stringify(receivedMaterials))
+  }, [receivedMaterials, user])
+
+  // persist changes to pendingDeliveries
+  useEffect(() => {
+    if (!user) return
+    localStorage.setItem(`pending_deliveries_${user.id}`, JSON.stringify(pendingDeliveries))
+  }, [pendingDeliveries, user])
+
+  const handleConfirmDelivery = (e: React.FormEvent) => {
+    e.preventDefault()
+    setConfirmError("")
+    setConfirmSuccess("")
+    if (!confirmCode.trim()) {
+      setConfirmError("Insira o código da entrega")
+      return
+    }
+    const idx = pendingDeliveries.findIndex(p => p.code.toLowerCase() === confirmCode.trim().toLowerCase())
+    if (idx === -1) {
+      setConfirmError("Código não encontrado entre entregas pendentes")
+      return
+    }
+    const found = pendingDeliveries[idx]
+    const newReceived: ReceivedMaterial = {
+      id: found.code,
+      type: found.type,
+      weight: found.weight,
+      date: new Date().toISOString(),
+      source: found.source,
+      points: found.points,
+    }
+    setReceivedMaterials(prev => [newReceived, ...prev])
+    // remove from pending
+    setPendingDeliveries(prev => prev.filter((_, i) => i !== idx))
+    setConfirmSuccess("Entrega confirmada com sucesso")
+    setConfirmCode("")
+  }
 
   if (isLoading || !user) {
     return (
@@ -145,6 +221,8 @@ export default function ReceiverDashboard() {
         {/* Main Content Tabs */}
         <Tabs defaultValue="points" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="confirm">Confirmar Entrega</TabsTrigger>
+            <TabsTrigger value="history">Histórico</TabsTrigger>
             <TabsTrigger value="points">Pontos</TabsTrigger>
             <TabsTrigger value="reports">Relatórios</TabsTrigger>
           </TabsList>
@@ -293,6 +371,72 @@ export default function ReceiverDashboard() {
                           <div className="text-right">
                             <p className="font-medium">{material.weight} kg</p>
                             <p className="text-sm text-green-700">+{material.points} pts</p>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Confirm Delivery Tab */}
+          <TabsContent value="confirm" className="space-y-4">
+            <h2 className="text-2xl font-bold">Confirmar Entrega</h2>
+            <Card>
+              <CardHeader>
+                <CardTitle>Inserir código de entrega</CardTitle>
+                <CardDescription>Insira o código fornecido pelo coletor para confirmar o recebimento</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleConfirmDelivery} className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="code" className="text-sm font-medium">Código de Entrega</label>
+                    <input
+                      id="code"
+                      value={confirmCode}
+                      onChange={(e) => setConfirmCode(e.target.value)}
+                      className="w-full border px-3 py-2 rounded"
+                      placeholder="Ex: ABC123"
+                    />
+                  </div>
+                  {confirmError && <p className="text-sm text-red-600">{confirmError}</p>}
+                  {confirmSuccess && <p className="text-sm text-green-700">{confirmSuccess}</p>}
+                  <div className="flex justify-end">
+                    <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded">Confirmar</button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* History Tab */}
+          <TabsContent value="history" className="space-y-4">
+            <h2 className="text-2xl font-bold">Histórico de Entregas Recebidas</h2>
+            <Card>
+              <CardHeader>
+                <CardTitle>Entregas Confirmadas</CardTitle>
+                <CardDescription>Lista de entregas que você confirmou</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {receivedMaterials.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhuma entrega confirmada ainda.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {receivedMaterials
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((mat) => (
+                        <div key={mat.id} className="flex justify-between items-start border-b pb-3 last:border-0">
+                          <div>
+                            <p className="font-medium">{mat.type}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {mat.source} • {new Date(mat.date).toLocaleDateString("pt-BR")}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{mat.weight} kg</p>
+                            <p className="text-sm text-green-700">+{mat.points} pts</p>
+                            <p className="text-xs text-muted-foreground mt-1">Código: {mat.id}</p>
                           </div>
                         </div>
                       ))}
