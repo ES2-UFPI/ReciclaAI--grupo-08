@@ -14,82 +14,48 @@ class CargaModelTest(TestCase):
             email="produtor1@example.com",
             password="123456",
         )
-        # Residuo conforme seu modelo: tipo (choices) + valor (DecimalField)
-        self.residuo = Residuo.objects.create(
-            tipo="PLASTICO",          # um dos choices: PLASTICO, PAPEL, VIDRO, METAL
-            valor=Decimal("2.50"),
+        self.residuo1 = Residuo.objects.create(
+            tipo="PLASTICO", valor=Decimal("2.50"),
+        )
+        self.residuo2 = Residuo.objects.create(
+            tipo="VIDRO", valor=Decimal("1.00"),
         )
         self.carga = Carga.objects.create(produtor=self.produtor)
 
     def test_valor_total_inicia_em_zero(self):
         self.assertEqual(self.carga.valor_total, Decimal("0.00"))
 
-    def test_criar_carga_residuo(self):
-        carga_residuo = CargaResiduo.objects.create(
-            carga=self.carga,
-            residuo=self.residuo,
-            peso_kg=Decimal("10.00"),
-            valor=Decimal("25.00"),
-        )
-        self.assertEqual(carga_residuo.valor, Decimal("25.00"))
-        self.assertEqual(carga_residuo.peso_kg, Decimal("10.00"))
-        self.assertEqual(carga_residuo.residuo, self.residuo)
-        self.assertEqual(carga_residuo.carga, self.carga)
-
-    def test_recalcular_valor_total(self):
-        CargaResiduo.objects.create(
-            carga=self.carga,
-            residuo=self.residuo,
-            peso_kg=Decimal("4.00"),
-            valor=Decimal("10.00"),
-        )
-        CargaResiduo.objects.create(
-            carga=self.carga,
-            residuo=self.residuo,
-            peso_kg=Decimal("2.00"),
-            valor=Decimal("5.00"),
-        )
-        self.carga.recalcular_valor_total()
-        self.assertEqual(self.carga.valor_total, Decimal("15.00"))
+    def test_adicionar_residuo_atualiza_valor_total(self):
+        item1 = self.carga.adicionar_residuo(self.residuo1, Decimal("4.00"))
+        item2 = self.carga.adicionar_residuo(self.residuo2, Decimal("3.00"))
+        self.assertEqual(item1.valor, Decimal("10.00"))
+        self.assertEqual(item2.valor, Decimal("3.00"))
+        self.carga.refresh_from_db()
+        self.assertEqual(self.carga.valor_total, Decimal("13.00"))
 
     def test_peso_total_kg_property(self):
-        CargaResiduo.objects.create(
-            carga=self.carga,
-            residuo=self.residuo,
-            peso_kg=Decimal("3.00"),
-            valor=Decimal("7.50"),
-        )
-        CargaResiduo.objects.create(
-            carga=self.carga,
-            residuo=self.residuo,
-            peso_kg=Decimal("2.00"),
-            valor=Decimal("5.00"),
-        )
-        total_peso = self.carga.peso_total_kg
-        self.assertEqual(total_peso, Decimal("5.00"))
+        self.carga.adicionar_residuo(self.residuo1, Decimal("2.00"))
+        self.carga.adicionar_residuo(self.residuo2, Decimal("5.00"))
+        self.assertEqual(self.carga.peso_total_kg, Decimal("7.00"))
 
-    def test_calcular_valor_do_item(self):
-        carga_residuo = CargaResiduo.objects.create(
-            carga=self.carga,
-            residuo=self.residuo,
-            peso_kg=Decimal("4.00"),
-            valor=Decimal("0.00"),
-        )
-        valor_calculado = carga_residuo.calcular_valor(salvar=True)
-        self.assertEqual(valor_calculado, Decimal("10.00"))
-        self.assertEqual(carga_residuo.valor, Decimal("10.00"))
+    def test_remover_item_atualiza_valor_total(self):
+        item1 = self.carga.adicionar_residuo(self.residuo1, Decimal("2.00"))
+        item2 = self.carga.adicionar_residuo(self.residuo2, Decimal("5.00"))
+        self.carga.remover_item(item1.id)
+        self.carga.refresh_from_db()
+        self.assertEqual(self.carga.valor_total, Decimal("5.00"))
+
+    def test_limpar_itens_zerar_valor_total(self):
+        self.carga.adicionar_residuo(self.residuo1, Decimal("2.00"))
+        self.carga.adicionar_residuo(self.residuo2, Decimal("5.00"))
+        self.carga.limpar_itens()
+        self.carga.refresh_from_db()
+        self.assertEqual(self.carga.valor_total, Decimal("0.00"))
+        self.assertEqual(self.carga.itens.count(), 0)
 
     def test_str_carga(self):
-        s = str(self.carga)
-        self.assertIn("Carga #", s)
-        self.assertIn("Produtor", s)
+        self.assertIn(f"Carga #{self.carga.id}", str(self.carga))
 
     def test_str_carga_residuo(self):
-        carga_residuo = CargaResiduo.objects.create(
-            carga=self.carga,
-            residuo=self.residuo,
-            peso_kg=Decimal("1.00"),
-            valor=Decimal("2.50"),
-        )
-        s = str(carga_residuo)
-        self.assertIn(f"Carga #{self.carga.id}", s)
+        item = self.carga.adicionar_residuo(self.residuo1, Decimal("1.00"))
+        self.assertIn(f"CargaResiduo #{item.id}", str(item))
